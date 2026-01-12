@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watch Party - Discord Style</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'gg sans', 'Roboto', sans-serif;
+            background-color: #36393f;
+            color: #dcddde;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .server-sidebar {
+            width: 72px;
+            background-color: #202225;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 0;
+            gap: 8px;
+        }
+
+        .server-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #7289da, #5b6eae);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .server-icon:hover {
+            border-radius: 16px;
+            background: linear-gradient(135deg, #8b9bde, #6d7fc5);
+        }
+
+        .channels-sidebar {
+            width: 240px;
+            background-color: #2f3136;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .server-name {
+            height: 48px;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            font-weight: bold;
+            border-bottom: 1px solid #202225;
+            box-shadow: 0 1px 0 rgba(0,0,0,.2);
+        }
+
+        .channels-list {
+            flex: 1;
+            padding: 16px 8px;
+            overflow-y: auto;
+        }
+
+        .channel-item {
+            padding: 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #96989d;
+            transition: all 0.15s;
+        }
+
+        .channel-item:hover {
+            background-color: #3b3d44;
+            color: #dcddde;
+        }
+
+        .channel-item.active {
+            background-color: #404249;
+            color: #fff;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #36393f;
+        }
+
+        .content-header {
+            height: 48px;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #202225;
+            box-shadow: 0 1px 0 rgba(0,0,0,.2);
+        }
+
+        .channel-name {
+            font-weight: bold;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mode-toggle {
+            display: flex;
+            gap: 8px;
+        }
+
+        .mode-btn {
+            background-color: #4f545c;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            color: #dcddde;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mode-btn.active {
+            background-color: #5865f2;
+            color: white;
+        }
+
+        .video-container {
+            flex: 1;
+            background-color: #202225;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .video-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #000;
+            position: relative;
+        }
+
+        #videoPlayer, #screenShareVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .video-placeholder {
+            text-align: center;
+            color: #72767d;
+        }
+
+        .video-placeholder h2 {
+            margin-bottom: 16px;
+        }
+
+        .video-controls {
+            padding: 16px;
+            background-color: #2f3136;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .control-input {
+            flex: 1;
+            min-width: 200px;
+            background-color: #40444b;
+            border: none;
+            padding: 10px 12px;
+            border-radius: 4px;
+            color: #dcddde;
+            font-size: 14px;
+        }
+
+        .control-btn {
+            background-color: #5865f2;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+
+        .control-btn:hover {
+            background-color: #4752c4;
+        }
+
+        .control-btn.danger {
+            background-color: #ed4245;
+        }
+
+        .control-btn.danger:hover {
+            background-color: #c03537;
+        }
+
+        .control-btn.success {
+            background-color: #43b581;
+        }
+
+        .control-btn.success:hover {
+            background-color: #3ca374;
+        }
+
+        .control-btn:disabled {
+            background-color: #4f545c;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .chat-container {
+            height: 300px;
+            background-color: #36393f;
+            display: flex;
+            flex-direction: column;
+            border-top: 1px solid #202225;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .chat-message {
+            margin-bottom: 16px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            flex: 1;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .message-username {
+            font-weight: 500;
+            color: #fff;
+        }
+
+        .message-timestamp {
+            font-size: 12px;
+            color: #72767d;
+        }
+
+        .message-text {
+            color: #dcddde;
+            line-height: 1.4;
+        }
+
+        .chat-input-container {
+            padding: 16px;
+        }
+
+        .chat-input {
+            width: 100%;
+            background-color: #40444b;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            color: #dcddde;
+            font-size: 14px;
+        }
+
+        .members-sidebar {
+            width: 240px;
+            background-color: #2f3136;
+            padding: 16px 8px;
+            overflow-y: auto;
+        }
+
+        .members-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #96989d;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            padding: 0 8px;
+        }
+
+        .member-item {
+            padding: 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+
+        .member-item:hover {
+            background-color: #3b3d44;
+        }
+
+        .member-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .member-avatar.speaking {
+            box-shadow: 0 0 0 3px #43b581;
+        }
+
+        .member-name {
+            flex: 1;
+            color: #dcddde;
+        }
+
+        .member-name.host {
+            color: #f0b232;
+        }
+
+        .mic-status {
+            width: 18px;
+            height: 18px;
+            color: #ed4245;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background-color: #36393f;
+            padding: 32px;
+            border-radius: 8px;
+            max-width: 440px;
+            width: 90%;
+        }
+
+        .modal h2 {
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        .modal p {
+            margin-bottom: 24px;
+            color: #b9bbbe;
+        }
+
+        .modal-input {
+            width: 100%;
+            background-color: #202225;
+            border: 1px solid #202225;
+            padding: 12px;
+            border-radius: 4px;
+            color: #dcddde;
+            font-size: 16px;
+            margin-bottom: 24px;
+        }
+
+        .modal-btn {
+            width: 100%;
+            background-color: #5865f2;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .modal-btn:hover {
+            background-color: #4752c4;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #2f3136;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #202225;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #1a1c1f;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .status-indicator {
+            padding: 8px 16px;
+            background-color: #43b581;
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-indicator.sharing {
+            background-color: #ed4245;
+        }
+    </style>
+</head>
+<body>
+    <div id="welcomeModal" class="modal-overlay">
+        <div class="modal">
+            <h2>Bienvenido a Watch Party</h2>
+            <p>Ingresa tu nombre y el ID de la sala para comenzar</p>
+            <input type="text" id="usernameInput" class="modal-input" placeholder="Tu nombre" maxlength="20">
+            <input type="text" id="roomIdInput" class="modal-input" placeholder="ID de la sala (ej: sala123)" maxlength="50">
+            <button onclick="joinRoom()" class="modal-btn">Unirse a la Sala</button>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <div class="server-sidebar">
+            <div class="server-icon">WP</div>
+        </div>
+
+        <div class="channels-sidebar">
+            <div class="server-name">Watch Party</div>
+            <div class="channels-list">
+                <div class="channel-item active">
+                    <span>📺</span> sala-principal
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="content-header">
+                <div class="channel-name">
+                    <span>📺</span> sala-principal
+                </div>
+                <div class="mode-toggle">
+                    <button class="mode-btn active" onclick="switchMode('url')">URL YouTube</button>
+                    <button class="mode-btn" onclick="switchMode('screen')">Compartir Pantalla</button>
+                </div>
+            </div>
+
+            <div class="video-container">
+                <div class="video-wrapper">
+                    <div id="videoPlaceholder" class="video-placeholder">
+                        <h2>🎬 Selecciona un modo</h2>
+                        <p>URL YouTube o Compartir Pantalla (arriba)</p>
+                    </div>
+                    <iframe id="videoPlayer" class="hidden" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+                    <video id="screenShareVideo" class="hidden" autoplay playsinline></video>
+                </div>
+
+                <div class="video-controls">
+                    <div id="urlControls" style="display: flex; gap: 12px; flex: 1; flex-wrap: wrap;">
+                        <input type="text" id="videoUrlInput" class="control-input" placeholder="Pega la URL de YouTube aquí...">
+                        <button onclick="loadVideo()" class="control-btn">Cargar Video</button>
+                    </div>
+                    
+                    <div id="screenControls" class="hidden" style="display: flex; gap: 12px; flex: 1; flex-wrap: wrap; align-items: center;">
+                        <span id="screenStatus" class="status-indicator">Listo para compartir</span>
+                        <button id="shareScreenBtn" onclick="startScreenShare()" class="control-btn success">📺 Compartir Pantalla</button>
+                        <button id="stopScreenBtn" onclick="stopScreenShare()" class="control-btn danger hidden">⏹️ Detener</button>
+                    </div>
+                    
+                    <button id="micToggle" onclick="toggleMic()" class="control-btn danger">🎤 Mutear</button>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div id="chatMessages" class="chat-messages"></div>
+                <div class="chat-input-container">
+                    <input type="text" id="chatInput" class="chat-input" placeholder="Escribe un mensaje..." onkeypress="handleChatKeypress(event)">
+                </div>
+            </div>
+        </div>
+
+        <div class="members-sidebar">
+            <div class="members-title">Miembros — <span id="memberCount">0</span></div>
+            <div id="membersList"></div>
+        </div>
+    </div>
+
+    <script>
+        let socket;
+        let roomId;
+        let username;
+        let userId;
+        let isMicMuted = false;
+        let isHost = false;
+        let player;
+        let peerConnections = new Map();
+        let localStream;
+        let screenStream;
+        let currentMode = 'url';
+        let screenPeerConnection;
+
+        function connectSocket() {
+            const serverUrl = window.location.hostname === 'localhost' 
+                ? 'http://localhost:3000'
+                : window.location.origin;
+            
+            socket = io(serverUrl);
+
+            socket.on('connect', () => {
+                console.log('✅ Conectado al servidor');
+            });
+
+            socket.on('room-state', (state) => {
+                console.log('Estado de la sala:', state);
+                userId = state.userId;
+                updateMembersList(state.users);
+                state.messages.forEach(msg => displayChatMessage(msg));
+                
+                if (state.videoState.url) {
+                    loadVideoFromUrl(state.videoState.url);
+                }
+                
+                const currentUser = state.users.find(u => u.id === userId);
+                isHost = currentUser ? currentUser.isHost : false;
+                
+                initWebRTC();
+            });
+
+            socket.on('user-joined', (user) => {
+                console.log('Usuario se unió:', user);
+                addMemberToList(user);
+                displaySystemMessage(`${user.username} se unió a la sala`);
+                
+                if (user.id !== userId) {
+                    createPeerConnection(user.id, true);
+                    
+                    // Si estoy compartiendo pantalla, enviar stream al nuevo usuario
+                    if (screenStream && isHost) {
+                        sendScreenShareToUser(user.id);
+                    }
+                }
+            });
+
+            socket.on('user-left', ({ userId: leftUserId, newHost }) => {
+                console.log('Usuario se fue:', leftUserId);
+                removeMemberFromList(leftUserId);
+                
+                if (peerConnections.has(leftUserId)) {
+                    peerConnections.get(leftUserId).close();
+                    peerConnections.delete(leftUserId);
+                }
+                
+                if (newHost === userId) {
+                    isHost = true;
+                    displaySystemMessage('Ahora eres el host');
+                }
+            });
+
+            socket.on('video-url-changed', (videoState) => {
+                loadVideoFromUrl(videoState.url);
+            });
+
+            socket.on('chat-message', (message) => {
+                displayChatMessage(message);
+            });
+
+            socket.on('user-mic-toggle', ({ userId: mutedUserId, muted }) => {
+                updateMemberMicStatus(mutedUserId, muted);
+            });
+
+            // Screen Share Signaling
+            socket.on('screen-share-offer', async ({ from, offer }) => {
+                console.log('📺 Recibiendo oferta de screen share de:', from);
+                const pc = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' }
+                    ]
+                });
+
+                pc.ontrack = (event) => {
+                    console.log('✅ Stream de pantalla recibido');
+                    const video = document.getElementById('screenShareVideo');
+                    video.srcObject = event.streams[0];
+                    video.classList.remove('hidden');
+                    document.getElementById('videoPlaceholder').classList.add('hidden');
+                    document.getElementById('videoPlayer').classList.add('hidden');
+                };
+
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        socket.emit('screen-share-ice-candidate', {
+                            roomId: roomId,
+                            to: from,
+                            candidate: event.candidate
+                        });
+                    }
+                };
+
+                await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                
+                socket.emit('screen-share-answer', {
+                    roomId: roomId,
+                    to: from,
+                    answer: answer
+                });
+
+                screenPeerConnection = pc;
+            });
+
+            socket.on('screen-share-answer', async ({ from, answer }) => {
+                const pc = peerConnections.get(from);
+                if (pc) {
+                    await pc.setRemoteDescription(new RTCSessionDescription(answer));
+                }
+            });
+
+            socket.on('screen-share-ice-candidate', async ({ from, candidate }) => {
+                if (screenPeerConnection) {
+                    await screenPeerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                } else {
+                    const pc = peerConnections.get(from);
+                    if (pc) {
+                        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                    }
+                }
+            });
+
+            socket.on('screen-share-stopped', () => {
+                console.log('📺 El host detuvo la transmisión');
+                const video = document.getElementById('screenShareVideo');
+                video.srcObject = null;
+                video.classList.add('hidden');
+                document.getElementById('videoPlaceholder').classList.remove('hidden');
+                displaySystemMessage('El host detuvo la transmisión de pantalla');
+            });
+
+            // WebRTC Voice
+            socket.on('webrtc-offer', async ({ from, offer }) => {
+                const pc = createPeerConnection(from, false);
+                await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                
+                socket.emit('webrtc-answer', {
+                    roomId: roomId,
+                    to: from,
+                    answer: answer
+                });
+            });
+
+            socket.on('webrtc-answer', async ({ from, answer }) => {
+                const pc = peerConnections.get(from);
+                if (pc) {
+                    await pc.setRemoteDescription(new RTCSessionDescription(answer));
+                }
+            });
+
+            socket.on('webrtc-ice-candidate', async ({ from, candidate }) => {
+                const pc = peerConnections.get(from);
+                if (pc) {
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                }
+            });
+        }
+
+        function joinRoom() {
+            username = document.getElementById('usernameInput').value.trim();
+            roomId = document.getElementById('roomIdInput').value.trim();
+
+            if (!username || !roomId) {
+                alert('Por favor ingresa tu nombre y el ID de la sala');
+                return;
+            }
+
+            document.getElementById('welcomeModal').classList.add('hidden');
+            connectSocket();
+            socket.emit('join-room', { roomId, username });
+        }
+
+        async function initWebRTC() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log('✅ Micrófono capturado');
+            } catch (error) {
+                console.error('❌ Error al capturar micrófono:', error);
+                displaySystemMessage('No se pudo acceder al micrófono');
+            }
+        }
+
+        function createPeerConnection(peerId, isInitiator) {
+            const pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            });
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    pc.addTrack(track, localStream);
+                });
+            }
+
+            pc.ontrack = (event) => {
+                console.log('✅ Audio remoto recibido de', peerId);
+                const audio = new Audio();
+                audio.srcObject = event.streams[0];
+                audio.play();
+            };
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('webrtc-ice-candidate', {
+                        roomId: roomId,
+                        to: peerId,
+                        candidate: event.candidate
+                    });
+                }
+            };
+
+            peerConnections.set(peerId, pc);
+
+            if (isInitiator) {
+                pc.createOffer().then(offer => {
+                    pc.setLocalDescription(offer);
+                    socket.emit('webrtc-offer', {
+                        roomId: roomId,
+                        to: peerId,
+                        offer: offer
+                    });
+                });
+            }
+
+            return pc;
+        }
+
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            if (mode === 'url') {
+                document.getElementById('urlControls').style.display = 'flex';
+                document.getElementById('screenControls').classList.add('hidden');
+                document.getElementById('screenShareVideo').classList.add('hidden');
+            } else {
+                document.getElementById('urlControls').style.display = 'none';
+                document.getElementById('screenControls').classList.remove('hidden');
+                document.getElementById('videoPlayer').classList.add('hidden');
+            }
+            
+            document.getElementById('videoPlaceholder').classList.remove('hidden');
+        }
+
+        async function startScreenShare() {
+            if (!isHost) {
+                alert('Solo el host puede compartir pantalla');
+                return;
+            }
+
+            try {
+                screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { 
+                        cursor: 'always',
+                        displaySurface: 'monitor'
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100
+                    }
+                });
+
+                console.log('✅ Captura de pantalla iniciada');
+                
+                // Mostrar mi propia pantalla
+                const video = document.getElementById('screenShareVideo');
+                video.srcObject = screenStream;
+                video.classList.remove('hidden');
+                document.getElementById('videoPlaceholder').classList.add('hidden');
+                
+                // Actualizar UI
+                document.getElementById('shareScreenBtn').classList.add('hidden');
+                document.getElementById('stopScreenBtn').classList.remove('hidden');
+                document.getElementById('screenStatus').textContent = '🔴 Transmitiendo';
+                document.getElementById('screenStatus').classList.add('sharing');
+
+                // Enviar a todos los usuarios conectados
+                const members = Array.from(document.getElementById('membersList').children);
+                for (const member of members) {
+                    const peerId = member.id.replace('member-', '');
+                    if (peerId !== userId) {
+                        await sendScreenShareToUser(peerId);
+                    }
+                }
+
+                // Detectar cuando se detiene la compartición
+                screenStream.getVideoTracks()[0].onended = () => {
+                    stopScreenShare();
+                };
+
+                displaySystemMessage('Compartiendo pantalla...');
+
+            } catch (error) {
+                console.error('❌ Error al capturar pantalla:', error);
+                alert('No se pudo capturar la pantalla. Asegúrate de dar permiso.');
+            }
+        }
+
+        async function sendScreenShareToUser(peerId) {
+            const pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                ]
+            });
+
+            screenStream.getTracks().forEach(track => {
+                pc.addTrack(track, screenStream);
+            });
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('screen-share-ice-candidate', {
+                        roomId: roomId,
+                        to: peerId,
+                        candidate: event.candidate
+                    });
+                }
+            };
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            socket.emit('screen-share-offer', {
+                roomId: roomId,
+                to: peerId,
+                offer: offer
+            });
+
+            peerConnections.set(peerId, pc);
+        }
+
+        function stopScreenShare() {
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => track.stop());
+                screenStream = null;
+            }
+
+            const video = document.getElementById('screenShareVideo');
+            video.srcObject = null;
+            video.classList.add('hidden');
+            document.getElementById('videoPlaceholder').classList.remove('hidden');
+
+            document.getElementById('shareScreenBtn').classList.remove('hidden');
+            document.getElementById('stopScreenBtn').classList.add('hidden');
+            document.getElementById('screenStatus').textContent = 'Listo para compartir';
+            document.getElementById('screenStatus').classList.remove('sharing');
+
+            socket.emit('screen-share-stopped', { roomId });
+            displaySystemMessage('Transmisión de pantalla detenida');
+        }
+
+        function loadVideo() {
+            const url = document.getElementById('videoUrlInput').value.trim();
+            
+            if (!url) {
+                alert('Por favor pega una URL válida');
+                return;
+            }
+
+            if (!isHost) {
+                alert('Solo el host puede cambiar el video');
+                return;
+            }
+
+            socket.emit('video-url-change', { roomId, url });
+        }
+
+        function loadVideoFromUrl(url) {
+            const videoId = extractYoutubeId(url);
+            
+            if (videoId) {
+                const embedUrl = `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${window.location.origin}`;
+                player = document.getElementById('videoPlayer');
+                player.src = embedUrl;
+                player.classList.remove('hidden');
+                document.getElementById('videoPlaceholder').classList.add('hidden');
+                document.getElementById('screenShareVideo').classList.add('hidden');
+            }
+        }
+
+        function extractYoutubeId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        function toggleMic() {
+            isMicMuted = !isMicMuted;
+            
+            if (localStream) {
+                localStream.getAudioTracks().forEach(track => {
+                    track.enabled = !isMicMuted;
+                });
+            }
+
+            const btn = document.getElementById('micToggle');
+            btn.textContent = isMicMuted ? '🔇 Muteado' : '🎤 Mutear';
+            btn.className = isMicMuted ? 'control-btn' : 'control-btn danger';
+
+            socket.emit('toggle-mic', { roomId, muted: isMicMuted });
+        }
+
+        function handleChatKeypress(event) {
+            if (event.key === 'Enter') {
+                sendChatMessage();
+            }
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            socket.emit('chat-message', { roomId, message });
+            input.value = '';
+        }
+
+        function displayChatMessage(message) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageEl = document.createElement('div');
+            messageEl.className = 'chat-message';
+            messageEl.innerHTML = `
+                <div class="message-avatar" style="background-color: ${message.avatar}"></div>
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-username">${message.username}</span>
+                        <span class="message-timestamp">${message.timestamp}</span>
+                    </div>
+                    <div class="message-text">${escapeHtml(message.text)}</div>
+                </div>
+            `;
+            messagesDiv.appendChild(messageEl);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function displaySystemMessage(text) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageEl = document.createElement('div');
+            messageEl.className = 'chat-message';
+            messageEl.innerHTML = `
+                <div class="message-avatar" style="background-color: #5865f2"></div>
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-username">Sistema</span>
+                    </div>
+                    <div class="message-text" style="color: #b9bbbe; font-style: italic;">${text}</div>
+                </div>
+            `;
+            messagesDiv.appendChild(messageEl);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateMembersList(users) {
+            const list = document.getElementById('membersList');
+            list.innerHTML = '';
+            users.forEach(user => addMemberToList(user));
+            document.getElementById('memberCount').textContent = users.length;
+        }
+
+        function addMemberToList(user) {
+            const list = document.getElementById('membersList');
+            const memberEl = document.createElement('div');
+            memberEl.className = 'member-item';
+            memberEl.id = `member-${user.id}`;
+            memberEl.innerHTML = `
+                <div class="member-avatar" style="background-color: ${user.avatar}"></div>
+                <span class="member-name ${user.isHost ? 'host' : ''}">${user.username}${user.isHost ? ' 👑' : ''}</span>
+                ${user.micMuted ? '<span class="mic-status">🔇</span>' : ''}
+            `;
+            list.appendChild(memberEl);
+            
+            const count = list.children.length;
+            document.getElementById('memberCount').textContent = count;
+        }
+
+        function removeMemberFromList(userId) {
+            const memberEl = document.getElementById(`member-${userId}`);
+            if (memberEl) {
+                memberEl.remove();
+            }
+            
+            const list = document.getElementById('membersList');
+            document.getElementById('memberCount').textContent = list.children.length;
+        }
+
+        function updateMemberMicStatus(userId, muted) {
+            const memberEl = document.getElementById(`member-${userId}`);
+            if (memberEl) {
+                const existingStatus = memberEl.querySelector('.mic-status');
+                if (muted && !existingStatus) {
+                    memberEl.innerHTML += '<span class="mic-status">🔇</span>';
+                } else if (!muted && existingStatus) {
+                    existingStatus.remove();
+                }
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
